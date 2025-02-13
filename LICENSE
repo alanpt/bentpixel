@@ -1,19 +1,46 @@
-Copyright (c) 2020 <Source Code Author>
+Bent Pixel License (Apache 2.0 with Restrictions)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Version 1.1
+1. License Grant (Based on Apache 2.0)
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Subject to the terms and conditions of this license, you are hereby granted a worldwide, royalty-free, non-exclusive, non-transferable license to use, copy, modify, and distribute this software, with the following restrictions:
+2. Restrictions
+2.1 No Military Use
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This software may not be used, directly or indirectly, for any military purposes, including but not limited to:
+
+    Defense-related applications, weapon development, intelligence gathering, or government surveillance programs.
+    Use by military organizations, defense contractors, or goAvernment defense agencies.
+
+2.2 No Commercial Use
+
+This software may not be used for commercial purposes, including but not limited to:
+
+    Selling, renting, leasing, or distributing the software for profit.
+    Integration into proprietary, closed-source, or for-profit products or services.
+    Use by corporations, businesses, or commercial entities, except for independent artists and performers who do not sell software products.
+
+2.3 No Use by Apartheid or Warring States
+
+This software may not be used by:
+
+    Apartheid states—any government, organization, or entity enforcing systemic racial, ethnic, or religious segregation and discrimination.
+    Warring countries—any nation currently engaged in aggressive warfare, invasion, or occupation of another country in violation of international law.
+
+2.4 Compliance with Third-Party Licenses
+
+This software includes third-party components that are licensed separately. Users must comply with the terms of those licenses, including:
+
+    ExoPlayer (Apache License 2.0)
+    OpenCV (Apache License 2.0)
+    Android SDK (Apache License 2.0)
+
+3. Redistribution and Modifications
+
+    Modifications are allowed, but any redistribution must comply with the restrictions in Section 2.
+    Any modifications must retain this license and attribution to the original author(s).
+    Redistribution under any other license is not permitted.
+
+4. Disclaimer of Warranty
+
+THIS SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT. THE AUTHORS SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM THE USE OR INABILITY TO USE THIS SOFTWARE.
