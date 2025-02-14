@@ -1,10 +1,10 @@
-name: Build APK
+name: Build and Release APK
 
 on:
   push:
     branches:
-      - main # Or your main development branch
-  workflow_dispatch: # Allow manual triggering
+      - main  # Trigger on pushes to the main branch
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   build:
@@ -17,17 +17,37 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17' # Or your project's Java version
+          java-version: '17'  # Specify your project's Java version
           distribution: 'temurin'
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleRelease  # Use assembleDebug if you want a debug APK
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Create Git Tag
+        id: create_tag
+        run: |
+          TAG_NAME="v$(date +'%Y%m%d%H%M%S')"  # Generates a tag based on the current timestamp
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
         with:
-          name: app-debug.apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          tag_name: ${{ steps.create_tag.outputs.TAG_NAME }}
+          release_name: Release ${{ steps.create_tag.outputs.TAG_NAME }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK to Release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: app/build/outputs/apk/release/app-release.apk  # Adjust the path if necessary
+          asset_name: app-release.apk
+          asset_content_type: application/vnd.android.package-archive
