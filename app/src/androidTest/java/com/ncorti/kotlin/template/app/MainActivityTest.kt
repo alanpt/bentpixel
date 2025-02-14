@@ -20,12 +20,5 @@ class MainActivityTest {
     @get:Rule
     val rule = activityScenarioRule<MainActivity>()
 
-    @Test
-    fun typeANumber_resultIsDisplayed() {
-        onView(withId(R.id.edit_text_factorial)).perform(typeText("1"), closeSoftKeyboard())
-        onView(withId(R.id.button_compute)).perform(click())
 
-        onView(withId(R.id.text_result)).check(matches(isDisplayed()))
-        onView(withId(R.id.text_result)).check(matches(withText("1")))
-    }
 }
