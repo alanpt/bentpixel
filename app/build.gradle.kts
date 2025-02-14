@@ -70,4 +70,6 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit.ktx)
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.espresso.core)
+    implementation(libs.opencv) // Or the latest version
+
 }
