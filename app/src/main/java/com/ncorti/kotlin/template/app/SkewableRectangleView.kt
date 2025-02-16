@@ -2,7 +2,6 @@ package com.ncorti.kotlin.template.app
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -58,11 +57,18 @@ class SkewableRectangleView @JvmOverloads constructor(
     private var originalBitmap: Bitmap? = null
     private var viewWidth: Int = 0
     private var viewHeight: Int = 0
+    private var bitmap: Bitmap? = null
 
     init {
         // Load the image from resources
-        originalBitmap = BitmapFactory.decodeResource(resources, R.drawable.burntpixel)
         Log.d("SkewableRectangleView", "Image loaded: ${originalBitmap != null}")
+    }
+
+    fun setBitmap(bitmap: Bitmap?) {
+        this.bitmap = bitmap
+        originalBitmap = bitmap
+        transformedBitmap = null
+        invalidate()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -70,7 +76,9 @@ class SkewableRectangleView @JvmOverloads constructor(
         viewWidth = w
         viewHeight = h
         updateCornerHandles()
-        updateImage()
+        if (originalBitmap != null) {
+            updateImage()
+        }
     }
 
     private fun updateCornerHandles() {
@@ -88,6 +96,8 @@ class SkewableRectangleView @JvmOverloads constructor(
         Log.d("SkewableRectangleView", "transformedBitmap is null: ${transformedBitmap == null}")
         if (transformedBitmap != null) {
             canvas.drawBitmap(transformedBitmap!!, 0f, 0f, null)
+        } else if (bitmap != null) {
+            canvas.drawBitmap(bitmap!!, 0f, 0f, null)
         }
         // Draw handles
         drawCornerHandles(canvas)
@@ -118,72 +128,74 @@ class SkewableRectangleView @JvmOverloads constructor(
         val perspectiveTransform = Imgproc.getPerspectiveTransform(srcPoints, dstPoints)
 
         // Apply the transform
-        val srcMat = Mat()
-        Utils.bitmapToMat(originalBitmap, srcMat)
-        val dstMat = Mat()
-        Imgproc.warpPerspective(srcMat, dstMat, perspectiveTransform, org.opencv.core.Size(viewWidth.toDouble(), viewHeight.toDouble()))
+        val src = Mat()
+        Utils.bitmapToMat(originalBitmap, src)
+        val dst = Mat()
+        Imgproc.warpPerspective(src, dst, perspectiveTransform, org.opencv.core.Size(viewWidth.toDouble(), viewHeight.toDouble()))
 
-        // Convert back to Bitmap
+        // Convert the transformed Mat back to a Bitmap
         transformedBitmap = Bitmap.createBitmap(viewWidth, viewHeight, Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(dstMat, transformedBitmap)
-        Log.d("SkewableRectangleView", "Image transformed successfully")
+        Utils.matToBitmap(dst, transformedBitmap)
+
+        // Release Mat objects
+        src.release()
+        dst.release()
+        perspectiveTransform.release()
+
         invalidate()
     }
 
     private fun drawCornerHandles(canvas: Canvas) {
-        cornerHandles.forEach { handle ->
-            canvas.drawCircle(handle.x, handle.y, handleRadius, handlePaint)
+        if (isInEditMode) {
+            cornerHandles.forEach { handle ->
+                canvas.drawCircle(handle.x, handle.y, handleRadius, handlePaint)
+            }
         }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (gestureDetector.onTouchEvent(event)) {
-            return true
-        }
-
+        gestureDetector.onTouchEvent(event)
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                lastTouchX = event.x
-                lastTouchY = event.y
-                selectedHandleIndex = getSelectedHandleIndex(event.x, event.y)
-                if (selectedHandleIndex != -1) {
-                    parent.requestDisallowInterceptTouchEvent(true)
+                if (isInEditMode) {
+                    selectedHandleIndex = findSelectedHandle(event.x, event.y)
+                    if (selectedHandleIndex != -1) {
+                        lastTouchX = event.x
+                        lastTouchY = event.y
+                        return true
+                    }
                 }
-                return selectedHandleIndex != -1
             }
-
             MotionEvent.ACTION_MOVE -> {
-                if (selectedHandleIndex != -1) {
+                if (isInEditMode && selectedHandleIndex != -1) {
                     val dx = event.x - lastTouchX
                     val dy = event.y - lastTouchY
-                    cornerHandles[selectedHandleIndex] = PointF(cornerHandles[selectedHandleIndex].x + dx, cornerHandles[selectedHandleIndex].y + dy)
+                    cornerHandles[selectedHandleIndex].x += dx
+                    cornerHandles[selectedHandleIndex].y += dy
                     lastTouchX = event.x
                     lastTouchY = event.y
                     updateImage()
+                    invalidate()
                     return true
                 }
             }
-
             MotionEvent.ACTION_UP -> {
-                selectedHandleIndex = -1
-                parent.requestDisallowInterceptTouchEvent(false)
-                return true
+                if (isInEditMode && selectedHandleIndex != -1) {
+                    selectedHandleIndex = -1
+                    return true
+                }
             }
         }
-        return super.onTouchEvent(event)
+        return true
     }
 
-    private fun getSelectedHandleIndex(x: Float, y: Float): Int {
+    private fun findSelectedHandle(x: Float, y: Float): Int {
         cornerHandles.forEachIndexed { index, handle ->
-            val distance = calculateDistance(x, y, handle.x, handle.y)
-            if (distance <= handleRadius) {
+            if (x >= handle.x - handleRadius && x <= handle.x + handleRadius &&
+                y >= handle.y - handleRadius && y <= handle.y + handleRadius) {
                 return index
             }
         }
         return -1
-    }
-
-    private fun calculateDistance(x1: Float, y1: Float, x2: Float, y2: Float): Float {
-        return kotlin.math.sqrt(((x1 - x2) * (x1 - x2)) + ((y1 - y2) * (y1 - y2)))
     }
 }

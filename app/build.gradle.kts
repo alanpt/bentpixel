@@ -71,5 +71,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.espresso.core)
     implementation(libs.opencv) // Or the latest version
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
+
 
 }
