@@ -4,18 +4,16 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PointF
 import android.util.AttributeSet
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.Surface
 import android.view.View
-import org.opencv.android.Utils
-import org.opencv.core.Mat
-import org.opencv.core.MatOfPoint2f
-import org.opencv.core.Point
-import org.opencv.imgproc.Imgproc
+import androidx.core.content.ContextCompat
 
 class SkewableRectangleView @JvmOverloads constructor(
     context: Context,
@@ -23,23 +21,9 @@ class SkewableRectangleView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    companion object {
-        init {
-            System.loadLibrary("opencv_java4")
-            Log.d("SkewableRectangleView", "OpenCV library loaded")
-        }
-    }
-
-    private val paint = Paint().apply {
-        color = Color.RED
-        style = Paint.Style.FILL
-    }
-
-    private val handlePaint = Paint().apply {
-        color = Color.BLUE
-        style = Paint.Style.FILL
-    }
-
+    private var videoSurface: Surface? = null
+    private val handlePaint = Paint().apply { color = Color.BLUE; style = Paint.Style.FILL }
+    private var burntPixelLogo: Bitmap? = null
     private var isInEditMode = false
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDoubleTap(e: MotionEvent): Boolean {
@@ -48,27 +32,26 @@ class SkewableRectangleView @JvmOverloads constructor(
             return true
         }
     })
-    private val handleRadius = 20f
+    private val handleRadius = 40f
     private val cornerHandles = mutableListOf<PointF>()
     private var selectedHandleIndex = -1
     private var lastTouchX = 0f
     private var lastTouchY = 0f
-    private var transformedBitmap: Bitmap? = null
-    private var originalBitmap: Bitmap? = null
-    private var viewWidth: Int = 0
-    private var viewHeight: Int = 0
-    private var bitmap: Bitmap? = null
+    private var viewWidth = 0
+    private var viewHeight = 0
 
     init {
-        // Load the image from resources
-        Log.d("SkewableRectangleView", "Image loaded: ${originalBitmap != null}")
+        ContextCompat.getDrawable(context, R.drawable.burntpixel)?.let {
+            burntPixelLogo = Bitmap.createBitmap(it.intrinsicWidth, it.intrinsicHeight, Bitmap.Config.ARGB_8888).also { bitmap ->
+                it.setBounds(0, 0, bitmap.width, bitmap.height)
+                it.draw(Canvas(bitmap))
+            }
+        }
     }
 
-    fun setBitmap(bitmap: Bitmap?) {
-        this.bitmap = bitmap
-        originalBitmap = bitmap
-        transformedBitmap = null
-        invalidate()
+    fun setVideoSurface(surface: Surface?) {
+        Log.d("SkewableRectangleView", "setVideoSurface called")
+        videoSurface = surface
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -76,81 +59,35 @@ class SkewableRectangleView @JvmOverloads constructor(
         viewWidth = w
         viewHeight = h
         updateCornerHandles()
-        if (originalBitmap != null) {
-            updateImage()
-        }
     }
 
     private fun updateCornerHandles() {
-        cornerHandles.clear()
-        Log.d("SkewableRectangleView", "updateCornerHandles() called. Width: $viewWidth, Height: $viewHeight")
-        cornerHandles.add(PointF(0f, 0f)) // Top-left
-        cornerHandles.add(PointF(viewWidth.toFloat(), 0f)) // Top-right
-        cornerHandles.add(PointF(viewWidth.toFloat(), viewHeight.toFloat())) // Bottom-right
-        cornerHandles.add(PointF(0f, viewHeight.toFloat())) // Bottom-left
+        cornerHandles.apply {
+            clear()
+            add(PointF(0f, 0f)) // Top-left
+            add(PointF(viewWidth.toFloat(), 0f)) // Top-right
+            add(PointF(viewWidth.toFloat(), viewHeight.toFloat())) // Bottom-right
+            add(PointF(0f, viewHeight.toFloat())) // Bottom-left
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
-        Log.d("SkewableRectangleView", "onDraw() called")
         super.onDraw(canvas)
-        Log.d("SkewableRectangleView", "transformedBitmap is null: ${transformedBitmap == null}")
-        if (transformedBitmap != null) {
-            canvas.drawBitmap(transformedBitmap!!, 0f, 0f, null)
-        } else if (bitmap != null) {
-            canvas.drawBitmap(bitmap!!, 0f, 0f, null)
-        }
-        // Draw handles
+        applySkewTransformation(canvas)
+        if (isInEditMode && burntPixelLogo != null) drawStretchedLogo(canvas)
         drawCornerHandles(canvas)
     }
 
-    private fun updateImage() {
-        Log.d("SkewableRectangleView", "updateImage() called")
-        if (originalBitmap == null) {
-            Log.e("SkewableRectangleView", "originalBitmap is null")
-            return
-        }
-
-        // Convert cornerHandles to OpenCV Mat
-        val srcPoints = MatOfPoint2f(
-            Point(0.0, 0.0),
-            Point(originalBitmap!!.width.toDouble(), 0.0),
-            Point(originalBitmap!!.width.toDouble(), originalBitmap!!.height.toDouble()),
-            Point(0.0, originalBitmap!!.height.toDouble())
-        )
-        val dstPoints = MatOfPoint2f(
-            Point(cornerHandles[0].x.toDouble(), cornerHandles[0].y.toDouble()),
-            Point(cornerHandles[1].x.toDouble(), cornerHandles[1].y.toDouble()),
-            Point(cornerHandles[2].x.toDouble(), cornerHandles[2].y.toDouble()),
-            Point(cornerHandles[3].x.toDouble(), cornerHandles[3].y.toDouble())
-        )
-
-        // Calculate the perspective transform
-        val perspectiveTransform = Imgproc.getPerspectiveTransform(srcPoints, dstPoints)
-
-        // Apply the transform
-        val src = Mat()
-        Utils.bitmapToMat(originalBitmap, src)
-        val dst = Mat()
-        Imgproc.warpPerspective(src, dst, perspectiveTransform, org.opencv.core.Size(viewWidth.toDouble(), viewHeight.toDouble()))
-
-        // Convert the transformed Mat back to a Bitmap
-        transformedBitmap = Bitmap.createBitmap(viewWidth, viewHeight, Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(dst, transformedBitmap)
-
-        // Release Mat objects
-        src.release()
-        dst.release()
-        perspectiveTransform.release()
-
-        invalidate()
+    private fun applySkewTransformation(canvas: Canvas) {
+        val matrix = Matrix()
+        val src = floatArrayOf(0f, 0f, viewWidth.toFloat(), 0f, viewWidth.toFloat(), viewHeight.toFloat(), 0f, viewHeight.toFloat())
+        val dst = floatArrayOf(cornerHandles[0].x, cornerHandles[0].y, cornerHandles[1].x, cornerHandles[1].y, cornerHandles[2].x, cornerHandles[2].y, cornerHandles[3].x, cornerHandles[3].y)
+        matrix.setPolyToPoly(src, 0, dst, 0, 4)
+        canvas.concat(matrix)
     }
 
     private fun drawCornerHandles(canvas: Canvas) {
-        if (isInEditMode) {
-            cornerHandles.forEach { handle ->
-                canvas.drawCircle(handle.x, handle.y, handleRadius, handlePaint)
-            }
-        }
+        if (isInEditMode) cornerHandles.forEach { canvas.drawCircle(it.x, it.y, handleRadius, handlePaint) }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -170,11 +107,9 @@ class SkewableRectangleView @JvmOverloads constructor(
                 if (isInEditMode && selectedHandleIndex != -1) {
                     val dx = event.x - lastTouchX
                     val dy = event.y - lastTouchY
-                    cornerHandles[selectedHandleIndex].x += dx
-                    cornerHandles[selectedHandleIndex].y += dy
+                    cornerHandles[selectedHandleIndex].apply { x += dx; y += dy }
                     lastTouchX = event.x
                     lastTouchY = event.y
-                    updateImage()
                     invalidate()
                     return true
                 }
@@ -191,11 +126,19 @@ class SkewableRectangleView @JvmOverloads constructor(
 
     private fun findSelectedHandle(x: Float, y: Float): Int {
         cornerHandles.forEachIndexed { index, handle ->
-            if (x >= handle.x - handleRadius && x <= handle.x + handleRadius &&
-                y >= handle.y - handleRadius && y <= handle.y + handleRadius) {
+            if (x in handle.x - handleRadius..handle.x + handleRadius &&
+                y in handle.y - handleRadius..handle.y + handleRadius) {
                 return index
             }
         }
         return -1
+    }
+
+    private fun drawStretchedLogo(canvas: Canvas) {
+        burntPixelLogo?.let { logo ->
+            val matrix = Matrix()
+            matrix.postScale(viewWidth.toFloat() / logo.width, viewHeight.toFloat() / logo.height)
+            canvas.drawBitmap(logo, matrix, null)
+        }
     }
 }

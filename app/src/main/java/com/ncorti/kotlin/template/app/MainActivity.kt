@@ -2,29 +2,23 @@ package com.ncorti.kotlin.template.app
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
+import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.View
+import android.view.Surface
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.ncorti.kotlin.template.app.databinding.ActivityMainBinding
 import java.io.File
-import java.io.FileInputStream
-import java.io.IOException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -35,9 +29,17 @@ class MainActivity : AppCompatActivity() {
     private var mediaPlayer: MediaPlayer? = null
     private var screenWidth = 0
     private var screenHeight = 0
+    private var videoSurface: Surface? = null
 
     companion object {
         private const val REQUEST_READ_EXTERNAL_STORAGE = 1
+    }
+
+    private fun setupViewDimensions() {
+        binding.skewableRectangleView.post {
+            screenWidth = binding.skewableRectangleView.width
+            screenHeight = binding.skewableRectangleView.height
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,32 +48,31 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         hideSystemBars()
         requestReadExternalStoragePermission()
-        binding.skewableRectangleView.post {
-            screenWidth = binding.skewableRectangleView.width
-            screenHeight = binding.skewableRectangleView.height
-        }
-        binding.skewableRectangleView.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_UP) {
-                val x = event.x
-                val y = event.y
-                if (isClickInCenter(x, y)) {
-                    playNextMedia()
-                    return@setOnTouchListener true
-                }
-            }
-            false
-        }
+        setupViewDimensions()
+        setupTouchListener()
     }
 
     private fun requestReadExternalStoragePermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), REQUEST_READ_EXTERNAL_STORAGE)
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
+                REQUEST_READ_EXTERNAL_STORAGE
+            )
         } else {
             loadMediaFiles()
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_READ_EXTERNAL_STORAGE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -121,51 +122,42 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hideSystemBars() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(false)
-            val controller = window.insetsController
-            if (controller != null) {
-                controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } else {
-            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
+        window.setDecorFitsSystemWindows(false)
+        val controller = window.insetsController
+        if (controller != null) {
+            controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+            controller.systemBarsBehavior =
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 
     private fun showSystemBars() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(true)
-            val controller = window.insetsController
-            if (controller != null) {
-                controller.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_DEFAULT
-                }
-            }
-        } else {
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        window.setDecorFitsSystemWindows(true)
+        val controller = window.insetsController
+        if (controller != null) {
+            controller.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+            controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_DEFAULT
         }
     }
 
     private fun loadMediaFiles() {
-        val vjFolderPath = Environment.getExternalStorageDirectory().absolutePath + "/VJ"
-        val vjFolder = File(vjFolderPath)
+        val vjFolder =
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "VJ")
+        Log.d("MainActivity", "VJ folder path: ${vjFolder.absolutePath}")
+        Log.d("MainActivity", "VJ folder exists: ${vjFolder.exists()}")
+
         MediaFileChecker.checkMediaFiles(this, vjFolder)
-        if (vjFolder.exists() && vjFolder.isDirectory) {
-            mediaFiles = vjFolder.listFiles { file ->
-                val lowerCaseName = file.name.lowercase()
-                lowerCaseName.endsWith(".png") || lowerCaseName.endsWith(".jpg") || lowerCaseName.endsWith(".jpeg") || lowerCaseName.endsWith(".gif") || lowerCaseName.endsWith(".mp4") || lowerCaseName.endsWith(".ogv")
-            }?.toList() ?: emptyList()
-            if (mediaFiles.isNotEmpty()) {
-                currentMediaIndex = 0
-                playVideo(mediaFiles[currentMediaIndex])
-            } else {
-                Log.w("MainActivity", "VJ folder is empty")
-                showDefaultImage()
+        mediaFiles = vjFolder.listFiles { file ->
+            file.isFile && arrayOf(".mp4", ".ogv").any {
+                file.name.lowercase().endsWith(it)
             }
+        }?.toList() ?: emptyList()
+        Log.d("MainActivity", "Number of media files found: ${mediaFiles.size}")
+
+        if (mediaFiles.isNotEmpty()) {
+            currentMediaIndex = 0
+            playCurrentMedia()
         } else {
-            Log.w("MainActivity", "VJ folder does not exist")
             showDefaultImage()
         }
     }
@@ -176,58 +168,88 @@ class MainActivity : AppCompatActivity() {
             return
         }
         currentMediaIndex = (currentMediaIndex + 1) % mediaFiles.size
+        val nextFile = mediaFiles[currentMediaIndex]
+        Log.d("MainActivity", "Playing next media: ${nextFile.name}") // Added log
         playCurrentMedia()
     }
 
     private fun playCurrentMedia() {
         val currentFile = mediaFiles[currentMediaIndex]
-        val fileExtension = currentFile.extension.lowercase()
-        if (fileExtension == "mp4" || fileExtension == "ogv") {
-            playVideo(currentFile)
-        } else {
-            showImage(currentFile)
-        }
+        playVideo(currentFile)
     }
 
-    private fun showImage(file: File) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val bitmap = BitmapFactory.decodeStream(FileInputStream(file))
-                withContext(Dispatchers.Main) {
-                    binding.skewableRectangleView.setBitmap(bitmap)
-                }
-            } catch (e: IOException) {
-                withContext(Dispatchers.Main) {
-                    showDefaultImage()
-                }
-            }
-        }
+    override fun onPause() {
+        super.onPause()
+        mediaPlayer?.pause()
+    }
+
+    override fun onDestroy() {
+        mediaPlayer?.release()
+        mediaPlayer = null
+        super.onDestroy()
     }
 
     private fun playVideo(file: File) {
         try {
-            binding.skewableRectangleView.setBitmap(null)
-            mediaPlayer?.stop()
+            Log.d("MainActivity", "Playing video: ${file.absolutePath}")
             mediaPlayer?.release()
             mediaPlayer = MediaPlayer().apply {
-                setDataSource(this@MainActivity, Uri.fromFile(file))
+                setDataSource(applicationContext, getSecureUri(file))
+                val surfaceTexture = SurfaceTexture(0)
+                videoSurface = Surface(surfaceTexture)
+                setSurface(videoSurface)
                 setOnPreparedListener {
+                    Log.d("MainActivity", "MediaPlayer prepared")
                     start()
                     isLooping = true
                 }
                 setOnErrorListener { _, what, extra ->
-                    Log.e("MainActivity", "MediaPlayer error: what=$what, extra=$extra")
+                    Log.e("MainActivity", "MediaPlayer error: $what | $extra")
                     showDefaultImage()
                     true
                 }
+                setOnInfoListener { _, what, extra ->
+                    Log.d("MainActivity", "MediaPlayer info: $what | $extra")
+                    false
+                }
+                setOnCompletionListener {
+                    Log.d("MainActivity", "MediaPlayer completed")
+                }
                 prepareAsync()
             }
-        } catch (e: IOException) {
+            binding.skewableRectangleView.setVideoSurface(videoSurface)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error playing video", e)
             showDefaultImage()
+        }
+    }
+
+    private fun getSecureUri(file: File): Uri {
+        Log.d("MainActivity", "Getting secure URI for: ${file.absolutePath}")
+        return FileProvider.getUriForFile(
+            this,
+            "com.burntpixel.bentpixel.fileprovider", // Correct authority
+            file
+        ).also {
+            Log.d("MainActivity", "Secure URI: $it")
         }
     }
 
     private fun showDefaultImage() {
         Log.w("MainActivity", "Showing default image")
+    }
+
+    private fun setupTouchListener() {
+        binding.skewableRectangleView.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_UP) {
+                val x = event.x
+                val y = event.y
+                if (isClickInCenter(x, y)) {
+                    playNextMedia()
+                    return@setOnTouchListener true
+                }
+            }
+            false
+        }
     }
 }
